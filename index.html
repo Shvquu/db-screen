@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DB Abfahrtstafel – Oberhausen Hbf</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       KOPFZEILE: Bahnhofsname + Uhrzeit
+  ════════════════════════════════════════════════════════════ -->
+  <header class="board-header">
+    <div class="header-left">
+      <span class="db-logo">DB</span>
+      <div class="station-info">
+        <span class="station-label">Abfahrt · Departures</span>
+        <span class="station-name" id="stationName">Oberhausen Hbf</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="clock-wrapper">
+        <span class="clock-label">Uhrzeit</span>
+        <span class="clock" id="clock">00:00:00</span>
+      </div>
+      <div class="refresh-info">
+        <span class="refresh-label">Aktualisiert:</span>
+        <span id="lastUpdate">–</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       TABELLENKÖPFE
+  ════════════════════════════════════════════════════════════ -->
+  <div class="table-header">
+    <div class="col-time">Zeit</div>
+    <div class="col-delay">+/−</div>
+    <div class="col-type">Zug</div>
+    <div class="col-destination">Ziel</div>
+    <div class="col-platform">Gl.</div>
+    <div class="col-info">Info</div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       HAUPTINHALT: Abfahrtsliste
+  ════════════════════════════════════════════════════════════ -->
+  <main class="board-body" id="boardBody">
+
+    <!-- Ladezustand -->
+    <div class="status-message" id="loadingMsg">
+      <div class="spinner"></div>
+      <span>Verbinde mit Fahrplandaten …</span>
+    </div>
+
+    <!-- Fehlerzustand -->
+    <div class="status-message hidden" id="errorMsg">
+      <span class="error-icon">⚠</span>
+      <span id="errorText">Verbindung fehlgeschlagen.</span>
+    </div>
+
+    <!-- Abfahrten werden hier per JS eingefügt -->
+    <div id="departureList" class="hidden"></div>
+
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       FUSSZEILE: Lauftext für Meldungen
+  ════════════════════════════════════════════════════════════ -->
+  <footer class="board-footer">
+    <div class="ticker-wrapper">
+      <span class="ticker-label">Hinweise:</span>
+      <div class="ticker-track">
+        <span class="ticker-content" id="tickerContent">
+          Bitte beachten Sie Ansagen auf dem Bahnsteig. &nbsp;&nbsp;·&nbsp;&nbsp;
+          Please listen to announcements on the platform. &nbsp;&nbsp;·&nbsp;&nbsp;
+          Alle Angaben ohne Gewähr – Live-Daten via transport.rest
+        </span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>

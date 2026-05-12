@@ -1,0 +1,473 @@
+/* ═══════════════════════════════════════════════════════════════════
+   DB Abfahrtstafel – style.css
+   LED-Matrix Optik · Deutsche Bahn Farbgebung
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Google Fonts: Orbitron für Digit-Optik, Share Tech Mono für Tabelle ── */
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@400;500;700&display=swap');
+
+/* ── CSS-Variablen ─────────────────────────────────────────────────── */
+:root {
+  --bg:          #0a0a0a;
+  --bg-row:      #0e0e0e;
+  --bg-alt:      #111111;
+  --orange:      #ff8c00;
+  --orange-dim:  #cc6e00;
+  --orange-glow: #ffaa33;
+  --red:         #ff2222;
+  --red-dim:     #991111;
+  --green:       #22dd44;
+  --yellow:      #ffdd00;
+  --white:       #f0f0f0;
+  --gray:        #444444;
+  --header-h:    5.5rem;
+  --footer-h:    2.8rem;
+  --col-header-h:2.2rem;
+  --font-mono:   'Share Tech Mono', monospace;
+  --font-display:'Orbitron', monospace;
+  --font-ui:     'Rajdhani', sans-serif;
+  --glow-orange: 0 0 6px #ff8c0088, 0 0 18px #ff8c0044;
+  --glow-red:    0 0 6px #ff222288, 0 0 18px #ff222244;
+}
+
+/* ── Reset & Base ──────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--orange);
+  font-family: var(--font-mono);
+}
+
+/* Leichte Scanline-Textur */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.08) 2px,
+    rgba(0,0,0,0.08) 4px
+  );
+  pointer-events: none;
+  z-index: 1000;
+}
+
+/* ── Header ────────────────────────────────────────────────────────── */
+.board-header {
+  position: fixed; top: 0; left: 0; right: 0;
+  height: var(--header-h);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 1.5rem;
+  background: #000;
+  border-bottom: 2px solid var(--orange-dim);
+  box-shadow: 0 2px 20px #ff8c0033;
+  z-index: 100;
+}
+
+.header-left {
+  display: flex; align-items: center; gap: 1rem;
+}
+
+/* DB-Logo Kachel */
+.db-logo {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 2rem;
+  color: #fff;
+  background: var(--red);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  letter-spacing: 0.05em;
+  box-shadow: var(--glow-red);
+  flex-shrink: 0;
+}
+
+.station-info {
+  display: flex; flex-direction: column; gap: 0.1rem;
+}
+
+.station-label {
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  letter-spacing: 0.2em;
+  color: var(--orange-dim);
+  text-transform: uppercase;
+}
+
+.station-name {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--orange-glow);
+  text-shadow: var(--glow-orange);
+  letter-spacing: 0.05em;
+}
+
+.header-right {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 0.2rem;
+}
+
+.clock-wrapper {
+  display: flex; flex-direction: column; align-items: flex-end;
+}
+
+.clock-label {
+  font-family: var(--font-ui);
+  font-size: 0.65rem;
+  letter-spacing: 0.2em;
+  color: var(--orange-dim);
+  text-transform: uppercase;
+}
+
+.clock {
+  font-family: var(--font-display);
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: var(--orange-glow);
+  text-shadow: var(--glow-orange);
+  letter-spacing: 0.1em;
+}
+
+.refresh-info {
+  font-family: var(--font-ui);
+  font-size: 0.65rem;
+  color: var(--gray);
+  letter-spacing: 0.05em;
+}
+.refresh-info span { color: var(--orange-dim); }
+
+/* ── Tabellen-Kopfzeile ────────────────────────────────────────────── */
+.table-header {
+  position: fixed;
+  top: var(--header-h);
+  left: 0; right: 0;
+  height: var(--col-header-h);
+  display: flex; align-items: center;
+  padding: 0 1rem;
+  background: #050505;
+  border-bottom: 1px solid #222;
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--orange-dim);
+  z-index: 99;
+  gap: 0;
+}
+
+/* ── Spaltenbreiten (müssen in JS-Zeilen gespiegelt werden) ─────────── */
+.col-time        { width: 7rem;  flex-shrink: 0; }
+.col-delay       { width: 4rem;  flex-shrink: 0; }
+.col-type        { width: 7rem;  flex-shrink: 0; }
+.col-destination { flex: 1;      min-width: 0;   }
+.col-platform    { width: 4rem;  flex-shrink: 0; text-align: center; }
+.col-info        { width: 18rem; flex-shrink: 0; }
+
+/* ── Board Body ────────────────────────────────────────────────────── */
+.board-body {
+  position: fixed;
+  top:    calc(var(--header-h) + var(--col-header-h));
+  bottom: var(--footer-h);
+  left: 0; right: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+}
+.board-body::-webkit-scrollbar { display: none; }
+
+/* ── Status-Meldungen ──────────────────────────────────────────────── */
+.status-message {
+  display: flex; align-items: center; justify-content: center;
+  gap: 1rem;
+  height: 6rem;
+  font-family: var(--font-ui);
+  font-size: 1rem;
+  letter-spacing: 0.08em;
+  color: var(--orange-dim);
+}
+
+.error-icon {
+  font-size: 1.4rem;
+  color: var(--red);
+  text-shadow: var(--glow-red);
+}
+
+.hidden { display: none !important; }
+
+/* ── Spinner ────────────────────────────────────────────────────────── */
+.spinner {
+  width: 1.4rem; height: 1.4rem;
+  border: 2px solid var(--orange-dim);
+  border-top-color: var(--orange-glow);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Departure Rows ─────────────────────────────────────────────────── */
+.departure-row {
+  display: flex; align-items: center;
+  padding: 0 1rem;
+  min-height: 3.4rem;
+  border-bottom: 1px solid #1a1a1a;
+  transition: background 0.3s;
+  animation: rowIn 0.4s ease both;
+  gap: 0;
+  overflow: hidden;
+}
+
+@keyframes rowIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.departure-row:nth-child(odd)  { background: var(--bg-row); }
+.departure-row:nth-child(even) { background: var(--bg-alt); }
+
+.departure-row:hover { background: #181400; }
+
+/* Verspätet-Zeile */
+.departure-row.delayed {
+  background: #130900 !important;
+  border-left: 3px solid var(--orange);
+}
+.departure-row.delayed:nth-child(even) { background: #160b00 !important; }
+
+/* Ausgefallen-Zeile */
+.departure-row.cancelled {
+  background: #130000 !important;
+  border-left: 3px solid var(--red);
+  opacity: 0.85;
+}
+
+/* ── Zellen ─────────────────────────────────────────────────────────── */
+.dep-time {
+  width: 7rem; flex-shrink: 0;
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--orange-glow);
+  text-shadow: var(--glow-orange);
+  letter-spacing: 0.05em;
+}
+
+/* Durchgestrichen bei Ausfall */
+.cancelled .dep-time {
+  color: var(--red);
+  text-shadow: var(--glow-red);
+  text-decoration: line-through;
+  text-decoration-color: var(--red);
+}
+
+.dep-delay {
+  width: 4rem; flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+.dep-delay.on-time   { color: var(--green); }
+.dep-delay.late      { color: var(--red); text-shadow: var(--glow-red); }
+.dep-delay.cancelled-label {
+  color: var(--red);
+  font-size: 0.7rem;
+  text-shadow: var(--glow-red);
+  animation: blink 1s step-start infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+.dep-type {
+  width: 7rem; flex-shrink: 0;
+}
+
+/* Zugtypbadge */
+.train-badge {
+  display: inline-block;
+  padding: 0.15em 0.45em;
+  border-radius: 3px;
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+.badge-ice  { background: #fff; color: #000; }
+.badge-ic   { background: #fff; color: #000; }
+.badge-ec   { background: #003d82; color: #fff; }
+.badge-re   { background: #cc1111; color: #fff; }
+.badge-rb   { background: #cc1111; color: #fff; }
+.badge-s    { background: #007934; color: #fff; }
+.badge-u    { background: #0067b0; color: #fff; }
+.badge-bus  { background: #9b59b6; color: #fff; }
+.badge-nj   { background: #1a1a4e; color: #f5a623; border: 1px solid #f5a623; }
+.badge-fern { background: #b00; color: #fff; }
+.badge-other{ background: var(--gray); color: #fff; }
+
+.dep-destination {
+  flex: 1; min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 1.05rem;
+  color: var(--white);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 0.5rem;
+}
+.cancelled .dep-destination {
+  color: #666;
+  text-decoration: line-through;
+  text-decoration-color: #666;
+}
+
+.dep-platform {
+  width: 4rem; flex-shrink: 0;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--yellow);
+  text-shadow: 0 0 6px #ffdd0066;
+}
+.dep-platform.changed {
+  color: var(--orange);
+  animation: blink 1.2s step-start infinite;
+}
+
+.dep-info {
+  width: 18rem; flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--orange-dim);
+  overflow: hidden;
+}
+
+/* Lauftext für Verspätungstext */
+.ticker-inner {
+  display: inline-block;
+  white-space: nowrap;
+  animation: none;
+}
+.ticker-inner.running {
+  animation: scrollText 14s linear infinite;
+}
+@keyframes scrollText {
+  0%   { transform: translateX(100%); }
+  100% { transform: translateX(-100%); }
+}
+
+/* ── Footer / Lauftext ───────────────────────────────────────────────── */
+.board-footer {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  height: var(--footer-h);
+  background: #050505;
+  border-top: 1px solid var(--orange-dim);
+  box-shadow: 0 -2px 15px #ff8c0022;
+  display: flex; align-items: center;
+  overflow: hidden;
+  z-index: 100;
+}
+
+.ticker-wrapper {
+  display: flex; align-items: center;
+  width: 100%; overflow: hidden;
+}
+
+.ticker-label {
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--orange-dim);
+  padding: 0 0.8rem;
+  white-space: nowrap;
+  border-right: 1px solid var(--gray);
+  margin-right: 0.6rem;
+}
+
+.ticker-track {
+  flex: 1;
+  overflow: hidden;
+  height: 100%;
+  display: flex; align-items: center;
+}
+
+.ticker-content {
+  display: inline-block;
+  white-space: nowrap;
+  color: var(--orange);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  animation: tickerScroll 40s linear infinite;
+}
+
+@keyframes tickerScroll {
+  0%   { transform: translateX(100vw); }
+  100% { transform: translateX(-100%); }
+}
+
+/* ── Responsive: Tablet & Klein-Display ─────────────────────────────── */
+@media (max-width: 900px) {
+  :root { --header-h: 4.5rem; }
+
+  .station-name  { font-size: 1.1rem; }
+  .clock         { font-size: 1.7rem; }
+  .db-logo       { font-size: 1.5rem; }
+
+  .col-info      { display: none; }
+  .dep-info      { display: none; }
+
+  .col-type      { width: 5.5rem; }
+  .dep-type      { width: 5.5rem; }
+}
+
+@media (max-width: 600px) {
+  :root { --header-h: 4rem; }
+
+  .station-label { display: none; }
+  .station-name  { font-size: 0.95rem; }
+  .clock         { font-size: 1.3rem; }
+  .db-logo       { font-size: 1.2rem; padding: 0.1em 0.3em; }
+  .refresh-info  { display: none; }
+
+  .col-type      { width: 4.8rem; }
+  .dep-type      { width: 4.8rem; }
+
+  .col-platform  { width: 3rem; }
+  .dep-platform  { width: 3rem; }
+
+  .dep-time      { font-size: 1.05rem; width: 5.5rem; }
+  .col-time      { width: 5.5rem; }
+
+  .col-delay     { width: 3rem; }
+  .dep-delay     { width: 3rem; font-size: 0.8rem; }
+
+  .dep-destination { font-size: 0.88rem; }
+  .train-badge     { font-size: 0.6rem; }
+}
+
+/* ── Raspberry Pi Vollbild-Optimierungen ────────────────────────────── */
+@media (min-width: 1920px) {
+  :root {
+    --header-h:     7rem;
+    --footer-h:     3.4rem;
+    --col-header-h: 2.8rem;
+  }
+  .station-name    { font-size: 2rem; }
+  .clock           { font-size: 3rem; }
+  .db-logo         { font-size: 2.6rem; }
+  .dep-time        { font-size: 1.8rem; }
+  .train-badge     { font-size: 1rem; }
+  .dep-destination { font-size: 1.4rem; }
+  .dep-platform    { font-size: 1.6rem; }
+  .departure-row   { min-height: 4.5rem; }
+  .ticker-content  { font-size: 1.1rem; }
+}
