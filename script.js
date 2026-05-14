@@ -88,10 +88,13 @@ updateClock();
  */
 function fmtTime(isoStr) {
   if (!isoStr) return '–';
-  const d = new Date(isoStr);
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
-  return `${hh}:${mm}`;
+  // Immer Europe/Berlin – unabhängig von Browser- oder Serverzeitzone
+  return new Date(isoStr).toLocaleTimeString('de-DE', {
+    timeZone: 'Europe/Berlin',
+    hour:     '2-digit',
+    minute:   '2-digit',
+    hour12:   false,
+  });
 }
 
 /**
