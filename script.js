@@ -17,7 +17,7 @@ const CONFIG = {
   stationId:    null,               // wird beim Start per lookupStation() gesetzt
 
   // Lokaler CORS-Proxy (node proxy.js)
-  apiBase: 'http://192.168.2.194:3000/api',
+  apiBase: window.location.origin + '/api', // automatisch: localhost UND Domain
 
   // Wie viele Minuten voraus abrufen
   durationMinutes: 90,
