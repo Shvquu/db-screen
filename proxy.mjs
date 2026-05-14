@@ -70,17 +70,25 @@ function detectProduct(trainStr) {
   return 'regional'; // RB, ME, R, NWB, ... alles andere
 }
 
+function berlinOffset() {
+  const now    = new Date();
+  const berlin = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Berlin' }));
+  return Math.round((berlin.getTime() - now.getTime()) / 3_600_000);
+}
+
 function toISO(timeStr) {
-  // timeStr = "HH:MM" → füge heutiges Datum + Zeitzone hinzu
   if (!timeStr) return null;
-  const now  = new Date();
-  const [hh, mm] = timeStr.split(':').map(Number);
-  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm, 0);
-  // Falls Uhrzeit in der Vergangenheit liegt → morgen
-  if (d.getTime() < Date.now() - 2 * 60_000) {
-    d.setDate(d.getDate() + 1);
-  }
-  return d.toISOString();
+  const off    = berlinOffset();
+  const sign   = off >= 0 ? '+' : '-';
+  const offStr = String(Math.abs(off)).padStart(2, '0') + ':00';
+  const now    = new Date();
+  const berlinNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Berlin' }));
+  const yyyy   = berlinNow.getFullYear();
+  const mo     = String(berlinNow.getMonth() + 1).padStart(2, '0');
+  const dy     = String(berlinNow.getDate()).padStart(2, '0');
+  const iso    = new Date(`${yyyy}-${mo}-${dy}T${timeStr}:00${sign}${offStr}`);
+  if (iso.getTime() < Date.now() - 2 * 60_000) iso.setDate(iso.getDate() + 1);
+  return iso.toISOString();
 }
 
 function convertDepartures(raw) {
@@ -158,7 +166,7 @@ app.get('/health', async (_req, res) => {
 
 app.use(express.static(__dirname));
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log('\n✅  DBF-Server läuft   →  http://localhost:' + PORT);
   console.log('    Tafel öffnen      →  http://localhost:' + PORT + '/index.html');
   console.log('    Diagnose          →  http://localhost:' + PORT + '/health\n');
