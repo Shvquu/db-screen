@@ -70,24 +70,38 @@ function detectProduct(trainStr) {
   return 'regional'; // RB, ME, R, NWB, ... alles andere
 }
 
-function berlinOffset() {
-  const now    = new Date();
-  const berlin = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Berlin' }));
-  return Math.round((berlin.getTime() - now.getTime()) / 3_600_000);
+// Aktuelles Datum in Europe/Berlin als "YYYY-MM-DD"
+function berlinDateStr(d = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Berlin',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(d);  // z.B. "2026-05-14"
 }
 
+// UTC-Offset Berlin in Stunden (+1 oder +2)
+function berlinOffset(d = new Date()) {
+  const berlinStr = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Berlin',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).format(d);  // z.B. "23:46:00"
+  const berlinMs = new Date(`${berlinDateStr(d)}T${berlinStr}Z`).getTime();
+  return Math.round((berlinMs - d.getTime()) / 3_600_000);
+}
+
+// "HH:MM" (Berlin-Lokalzeit aus DBF) → ISO-String
 function toISO(timeStr) {
   if (!timeStr) return null;
-  const off    = berlinOffset();
-  const sign   = off >= 0 ? '+' : '-';
-  const offStr = String(Math.abs(off)).padStart(2, '0') + ':00';
-  const now    = new Date();
-  const berlinNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Berlin' }));
-  const yyyy   = berlinNow.getFullYear();
-  const mo     = String(berlinNow.getMonth() + 1).padStart(2, '0');
-  const dy     = String(berlinNow.getDate()).padStart(2, '0');
-  const iso    = new Date(`${yyyy}-${mo}-${dy}T${timeStr}:00${sign}${offStr}`);
-  if (iso.getTime() < Date.now() - 2 * 60_000) iso.setDate(iso.getDate() + 1);
+  const now  = new Date();
+  const off  = berlinOffset(now);
+  const sign = off >= 0 ? '+' : '-';
+  const offStr = `${sign}${String(Math.abs(off)).padStart(2, '0')}:00`;
+  const date   = berlinDateStr(now);          // "2026-05-14"
+  let   iso    = new Date(`${date}T${timeStr}:00${offStr}`);
+  // Wenn Zeit mehr als 2 Min in der Vergangenheit → morgen
+  if (iso.getTime() < now.getTime() - 2 * 60_000) {
+    const tomorrow = new Date(now.getTime() + 24 * 3_600_000);
+    iso = new Date(`${berlinDateStr(tomorrow)}T${timeStr}:00${offStr}`);
+  }
   return iso.toISOString();
 }
 
