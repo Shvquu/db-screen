@@ -103,7 +103,8 @@ function fmtTime(isoStr) {
  */
 function calcDelay(planned, actual) {
   if (!planned || !actual) return null;
-  return Math.round((new Date(actual) - new Date(planned)) / 60_000);
+  const diff = Math.round((new Date(actual) - new Date(planned)) / 60_000);
+  return diff;
 }
 
 /**
@@ -341,6 +342,9 @@ function renderDepartures(departures) {
 
   updateTicker(visible);
 
+  // Sprachansagen werden von index.html inline-script ausgeführt
+  if (window._announcer) window._announcer(visible);
+
   elLastUpdate.textContent = fmtNow();
   elStationName.textContent = CONFIG.stationName;
 }
@@ -416,15 +420,3 @@ async function init() {
 }
 
 init();
-
-// Tastaturkürzel: F5 = manuell aktualisieren, F = Vollbild
-document.addEventListener('keydown', e => {
-  if (e.key === 'F5') { e.preventDefault(); load().then(r => null); }
-  if (e.key === 'f' || e.key === 'F') {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch(() => {});
-    } else {
-      document.exitFullscreen().catch(() => {});
-    }
-  }
-});
