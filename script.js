@@ -209,7 +209,8 @@ function buildRow(dep, index) {
   const destination = truncate(dep.direction ?? dep.destination?.name, 34);
 
   // Gleis
-  const platform        = dep.plannedPlatform ?? dep.platform ?? '–';
+  // DBF liefert "" statt null wenn kein Gleis bekannt → normalisieren
+  const platform = dep.plannedPlatform || dep.platform || null;
   const platformChanged = dep.platform && dep.plannedPlatform &&
       dep.platform !== dep.plannedPlatform;
 
@@ -253,10 +254,12 @@ function buildRow(dep, index) {
       : '';
 
   /* ── Plattform ───────────────────────────────────────────────── */
-  const platClass = platformChanged ? 'dep-platform changed' : 'dep-platform';
+  const platClass = platformChanged
+      ? 'dep-platform changed'
+      : platform ? 'dep-platform' : 'dep-platform unknown';
   const platLabel = platformChanged
       ? `⟶${dep.platform}`
-      : platform;
+      : platform || '?';
 
   /* ── HTML zusammenbauen ──────────────────────────────────────── */
   const row = document.createElement('div');
