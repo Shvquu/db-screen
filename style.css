@@ -46,11 +46,11 @@ body::before {
   content: '';
   position: fixed; inset: 0;
   background: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 2px,
-    rgba(0,0,0,0.08) 2px,
-    rgba(0,0,0,0.08) 4px
+          0deg,
+          transparent,
+          transparent 2px,
+          rgba(0,0,0,0.08) 2px,
+          rgba(0,0,0,0.08) 4px
   );
   pointer-events: none;
   z-index: 1000;
@@ -470,4 +470,81 @@ body::before {
   .dep-platform    { font-size: 1.6rem; }
   .departure-row   { min-height: 4.5rem; }
   .ticker-content  { font-size: 1.1rem; }
+}
+
+
+/* ── Header Buttons ──────────────────────────────────────────────── */
+.header-buttons {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-left: 1rem;
+}
+
+/* Basis-Stil für beide Buttons */
+.sound-toggle,
+.demo-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.8rem;
+  border-radius: 6px;
+  border: 1px solid var(--orange-dim);
+  background: transparent;
+  color: var(--orange);
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, color 0.2s, opacity 0.2s;
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+
+.btn-icon { font-size: 1rem; line-height: 1; }
+
+/* Sound-Toggle: AN-Zustand (Standard) */
+.sound-toggle {
+  border-color: var(--orange);
+  box-shadow: 0 0 6px #ff8c0033;
+}
+.sound-toggle:hover { background: #1a1000; }
+
+/* Sound-Toggle: AUS-Zustand */
+.sound-toggle.muted {
+  border-color: var(--gray);
+  color: var(--gray);
+  box-shadow: none;
+  opacity: 0.5;
+}
+.sound-toggle.muted:hover {
+  background: #111;
+  opacity: 0.75;
+}
+
+/* Demo-Button */
+.demo-btn {
+  border-color: var(--green);
+  color: var(--green);
+}
+.demo-btn:hover {
+  background: #001a06;
+  border-color: var(--green);
+  box-shadow: 0 0 6px #22dd4433;
+}
+.demo-btn:active { opacity: 0.7; }
+
+/* Demo-Button: spielt gerade ab */
+.demo-btn.playing {
+  animation: pulse-green 1s ease-in-out infinite;
+}
+@keyframes pulse-green {
+  0%, 100% { box-shadow: 0 0 4px #22dd4433; }
+  50%       { box-shadow: 0 0 14px #22dd4488; }
+}
+
+@media (max-width: 600px) {
+  .btn-label { display: none; }
+  .sound-toggle, .demo-btn { padding: 0.3rem 0.5rem; }
 }
