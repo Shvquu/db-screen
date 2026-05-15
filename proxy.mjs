@@ -60,14 +60,26 @@ async function fetchDBF(ds100, limit = 25) {
 /* ══════════════════════════════════════════════════════════════════
    DBF-Format → FPTF-Format (kompatibel mit script.js)
 ════════════════════════════════════════════════════════════════════ */
+// Betreiber-Prefix entfernen: "RRB RB36" → "RB36", "ERB RE3" → "RE3", "S S3" → "S3"
+function cleanTrainName(raw) {
+  const s = (raw || '').trim();
+  // Wenn zwei Token: prüfe ob zweiter Token ein bekannter Zugtyp ist
+  const m = s.match(/^\S+\s+((?:ICE|IC|EC|EN|NJ|TGV|RJ|IRE|RE|RB|ME|NX|FLX|S|U)\s?\w+)$/i);
+  if (m) return m[1].trim();
+  // "S S3" → "S3" (S-Bahn doppelt)
+  const s2 = s.match(/^S\s+(S\d+)$/i);
+  if (s2) return s2[1];
+  return s;
+}
+
 function detectProduct(trainStr) {
-  const t = (trainStr || '').toUpperCase().trim();
-  if (/^ICE/.test(t))                        return 'nationalExpress';
-  if (/^(IC|EC|EN|NJ|TGV|RJ|D\s)/.test(t))  return 'national';
-  if (/^(IRE|RE|FLX)/.test(t))              return 'regionalExp';
-  if (/^S\s?\d/.test(t))                     return 'suburban';
-  if (/^(BUS|SEV|STR|TRAM|AST)/.test(t))    return null; // rausfiltern
-  return 'regional'; // RB, ME, R, NWB, ... alles andere
+  const t = cleanTrainName(trainStr).toUpperCase().trim();
+  if (/^ICE/.test(t))                         return 'nationalExpress';
+  if (/^(IC|EC|EN|NJ|TGV|RJ|D\s)/.test(t))   return 'national';
+  if (/^(IRE|RE|FLX)/.test(t))               return 'regionalExp';
+  if (/^S\s?\d/.test(t))                      return 'suburban';
+  if (/^(BUS|SEV|STR|TRAM|AST)/.test(t))     return null;
+  return 'regional';
 }
 
 // Aktuelles Datum in Europe/Berlin als "YYYY-MM-DD"
@@ -136,10 +148,10 @@ function convertDepartures(raw) {
           when:            actualWhen,
           delay:           delayMin * 60, // in Sekunden (FPTF-kompatibel)
           cancelled,
-          plannedPlatform: d.scheduledPlatform ?? null,
-          platform:        d.platform ?? d.scheduledPlatform ?? null,
+          plannedPlatform: d.scheduledPlatform || d.platform || null,
+          platform:        d.platform || d.scheduledPlatform || null,
           line: {
-            name:    d.train ?? '',
+            name:    cleanTrainName(d.train ?? ''),
             product,
             mode:    'train',
           },
@@ -217,7 +229,7 @@ app.get('/health', async (_req, res) => {
 app.use(express.static(__dirname));
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log('\n✅  DBF-Server läuft   →  http://localhost:' + PORT);
-  console.log('    Tafel öffnen      →  http://localhost:' + PORT + '/index.html');
-  console.log('    Diagnose          →  http://localhost:' + PORT + '/health\n');
+  console.log('\n✅  DBF-Server läuft   →  https://db.kreuzenbeck.net');
+  console.log('    Tafel öffnen      →  https://db.kreuzenbeck.net/index.html');
+  console.log('    Diagnose          →  https://db.kreuzenbeck.net/health\n');
 });
