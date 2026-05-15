@@ -1,0 +1,422 @@
+/**
+ * announcer.js – DB-Bahnhofsansagen
+ * Gong via Web Audio API + originalgetreue DB-Phraseologie
+ */
+'use strict';
+
+const Announcer = (() => {
+
+    const CFG = {
+        lang:              'de-DE',
+        rate:              0.82,      // DB-Sprecher sind etwas langsamer als normal
+        pitch:             0.95,
+        volume:            1.0,
+        minDelayMinutes:   5,
+        announceWindowMinutes: 30,
+        gongVolume:        0.5,
+    };
+
+    const announced  = new Map();
+    let   queue      = [];
+    let   isSpeaking = false;
+    let   enabled    = true;
+    let   voice      = null;
+    const ttsReady   = 'speechSynthesis' in window;
+
+    /* ══════════════════════════════════════════════════════════════
+       GONG (Web Audio API – typischer DB 3-Ton-Gong)
+    ══════════════════════════════════════════════════════════════ */
+    let audioCtx = null;
+
+    function getAudioCtx() {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        // Bei gesperrtem Context (Browser-Policy) entsperren
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        return audioCtx;
+    }
+
+    /**
+     * Einen einzelnen Gong-Ton spielen
+     * @param {number} freq   Frequenz in Hz
+     * @param {number} start  Startzeitpunkt in Sekunden (AudioContext-Zeit)
+     * @param {number} dur    Dauer in Sekunden
+     */
+    function playTone(freq, start, dur) {
+        const ctx  = getAudioCtx();
+        const osc  = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.type      = 'sine';
+        osc.frequency.setValueAtTime(freq, start);
+
+        // Sanftes Ein- und Ausblenden (wie ein echter Gong)
+        gain.gain.setValueAtTime(0, start);
+        gain.gain.linearRampToValueAtTime(CFG.gongVolume, start + 0.04);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + dur);
+
+        osc.start(start);
+        osc.stop(start + dur);
+    }
+
+    /**
+     * DB 3-Ton-Gong spielen und Promise zurückgeben das wartet bis er fertig ist.
+     * Töne: E5 (659 Hz) → C5 (523 Hz) → G4 (392 Hz)
+     * Für Ausfälle: zusätzliche Wiederholung (Doppel-Gong)
+     */
+    function playGong(doubled = false) {
+        return new Promise(resolve => {
+            try {
+                const ctx  = getAudioCtx();
+                const now  = ctx.currentTime + 0.1;
+                const gap  = 0.55;   // Abstand zwischen Tönen
+
+                // Erster Gong
+                playTone(659, now,           1.4);
+                playTone(523, now + gap,     1.4);
+                playTone(392, now + gap * 2, 1.8);
+
+                let totalDur = gap * 2 + 1.8 + 0.2;
+
+                if (doubled) {
+                    // Doppel-Gong für Ausfälle (nach kurzer Pause)
+                    const off = totalDur + 0.4;
+                    playTone(659, now + off,           1.4);
+                    playTone(523, now + off + gap,     1.4);
+                    playTone(392, now + off + gap * 2, 1.8);
+                    totalDur = off + gap * 2 + 1.8 + 0.3;
+                }
+
+                setTimeout(resolve, totalDur * 1000);
+            } catch (e) {
+                console.warn('[Gong] Fehler:', e.message);
+                resolve(); // Auch ohne Gong weitermachen
+            }
+        });
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       STIMME
+    ══════════════════════════════════════════════════════════════ */
+    function loadVoice() {
+        const voices = window.speechSynthesis.getVoices();
+        if (!voices.length) return;
+        voice = voices.find(v => v.lang === 'de-DE' && v.localService)
+            ?? voices.find(v => v.lang === 'de-DE')
+            ?? voices.find(v => v.lang.startsWith('de'))
+            ?? voices[0] ?? null;
+        console.log(`[Announcer] Stimme: ${voice?.name ?? 'Systemstimme'}`);
+    }
+    if (ttsReady) {
+        loadVoice();
+        window.speechSynthesis.onvoiceschanged = loadVoice;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       TTS
+    ══════════════════════════════════════════════════════════════ */
+    function speakText(text) {
+        return new Promise(resolve => {
+            window.speechSynthesis.cancel();
+            const utt    = new SpeechSynthesisUtterance(text);
+            utt.lang     = CFG.lang;
+            utt.rate     = CFG.rate;
+            utt.pitch    = CFG.pitch;
+            utt.volume   = CFG.volume;
+            if (voice) utt.voice = voice;
+            utt.onend    = () => setTimeout(resolve, 800);
+            utt.onerror  = () => resolve();
+            window.speechSynthesis.speak(utt);
+        });
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       QUEUE
+    ══════════════════════════════════════════════════════════════ */
+    async function processQueue() {
+        if (isSpeaking || !queue.length) return;
+        isSpeaking = true;
+        while (queue.length && enabled) {
+            const item = queue.shift();
+            await playGong(item.doubled);
+            await speakText(item.text);
+        }
+        isSpeaking = false;
+    }
+
+    function enqueue(text, doubled = false) {
+        if (!enabled || !ttsReady) return;
+        queue.push({ text, doubled });
+        processQueue();
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       TEXT-HELFER
+    ══════════════════════════════════════════════════════════════ */
+
+    // "Düsseldorf Hbf" → "Düsseldorf Hauptbahnhof"
+    function cleanStation(name) {
+        return (name || '')
+            .replace(/\(([^)]+)\)/g, ' $1')
+            .replace(/\bHbf\b/gi,  'Hauptbahnhof')
+            .replace(/\bBhf\b/gi,  'Bahnhof')
+            .replace(/\bStr\./gi,  'Straße')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    // "RE3" → "Regionalexpress 3", "S3" → "S-Bahn 3", etc.
+    function expandLineName(name) {
+        const n = (name || '').trim();
+
+        // Zahl am Ende extrahieren
+        const numMatch = n.match(/(\d+[A-Za-z]?)$/);
+        const num = numMatch ? numMatch[1] : '';
+        const numStr = num ? ` ${num}` : '';
+
+        if (/^ICE/.test(n))  return `Intercity-Express${numStr}`;
+        if (/^IC/.test(n))   return `Intercity${numStr}`;
+        if (/^EC/.test(n))   return `Eurocity${numStr}`;
+        if (/^NJ/.test(n))   return `Nightjet${numStr}`;
+        if (/^IRE/.test(n))  return `Interregio-Express${numStr}`;
+        if (/^RE/.test(n))   return `Regionalexpress${numStr}`;
+        if (/^RB/.test(n))   return `Regionalbahn${numStr}`;
+        if (/^S\s?\d/.test(n)) return `S-Bahn${numStr}`;
+        if (/^TGV/.test(n))  return `T-G-V${numStr}`;
+        if (/^FLX/.test(n))  return `Flixtrain${numStr}`;
+        return n;
+    }
+
+    // Uhrzeit für TTS: "18:01" → "18 Uhr 01" / "18 Uhr"
+    function spokenTime(isoStr) {
+        if (!isoStr) return '';
+        const fmt = new Intl.DateTimeFormat('de-DE', {
+            timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit', hour12: false,
+        });
+        const parts = fmt.formatToParts(new Date(isoStr));
+        const hh = parts.find(p => p.type === 'hour')?.value   ?? '0';
+        const mm = parts.find(p => p.type === 'minute')?.value ?? '00';
+        return mm === '00' ? `${parseInt(hh)} Uhr` : `${parseInt(hh)} Uhr ${mm}`;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       DB ANSAGE-TEXTE (originalgetreue Phraseologie)
+    ══════════════════════════════════════════════════════════════ */
+
+    /**
+     * Verspätungsansage – DB-Stil:
+     * "Auf Gleis 7, Einfahrt, der Regionalexpress 3, nach Düsseldorf Hauptbahnhof.
+     *  Planmäßige Abfahrt: 18 Uhr 01. Heute, circa 13 Minuten später."
+     */
+    function buildDelayText(dep, delayMin) {
+        const line = expandLineName(dep.line?.name ?? '');
+        const dest = cleanStation(dep.direction ?? '');
+        const plat = dep.platform || dep.plannedPlatform;
+        const time = spokenTime(dep.plannedWhen);
+        const min  = `${delayMin} ${delayMin === 1 ? 'Minute' : 'Minuten'}`;
+
+        const gleis = plat ? `Auf Gleis ${plat}, ` : '';
+
+        return `${gleis}${line}, nach ${dest}. ` +
+            `Planmäßige Abfahrt: ${time}. ` +
+            `Heute, circa ${min} später. ` +
+            `Wir bitten um Entschuldigung.`;
+    }
+
+    /**
+     * Ausfallansage – DB-Stil (Doppel-Gong):
+     * "Achtung, Achtung. Der Regionalexpress 3, nach Düsseldorf Hauptbahnhof,
+     *  planmäßige Abfahrt 18 Uhr 01, auf Gleis 7, fällt heute aus.
+     *  Wir bitten um Entschuldigung."
+     */
+    function buildCancelText(dep) {
+        const line = expandLineName(dep.line?.name ?? '');
+        const dest = cleanStation(dep.direction ?? '');
+        const plat = dep.platform || dep.plannedPlatform;
+        const time = spokenTime(dep.plannedWhen);
+
+        const gleisStr = plat ? `, auf Gleis ${plat},` : '';
+
+        return `Achtung, Achtung. ` +
+            `${line}, nach ${dest}, ` +
+            `planmäßige Abfahrt ${time}${gleisStr}, ` +
+            `fällt heute aus. ` +
+            `Wir bitten um Entschuldigung.`;
+    }
+
+    /**
+     * Abfahrtsansage – DB-Stil:
+     * "Der Regionalexpress 3, nach Düsseldorf Hauptbahnhof,
+     *  fährt jetzt ab Gleis 7. Bitte Türen schließen."
+     */
+    function buildDepartureText(dep) {
+        const line = expandLineName(dep.line?.name ?? '');
+        const dest = cleanStation(dep.direction ?? '');
+        const plat = dep.platform || dep.plannedPlatform;
+
+        return plat
+            ? `${line}, nach ${dest}, fährt jetzt ab Gleis ${plat}. Bitte Türen schließen.`
+            : `${line}, nach ${dest}, fährt jetzt ab. Bitte Türen schließen.`;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       ECHTZEIT-VERARBEITUNG
+    ══════════════════════════════════════════════════════════════ */
+    function tripKey(dep, type) {
+        return `${type}|${dep.line?.name}|${dep.plannedWhen}`;
+    }
+
+    function minutesUntil(iso) {
+        return iso ? (new Date(iso).getTime() - Date.now()) / 60_000 : Infinity;
+    }
+
+    function processDepartures(departures) {
+        if (!enabled || !ttsReady) return;
+        const cutoff = Date.now() - 2 * 3_600_000;
+        for (const [k, t] of announced) { if (t < cutoff) announced.delete(k); }
+
+        for (const dep of departures) {
+            const until = minutesUntil(dep.when ?? dep.plannedWhen);
+            if (until < 0 || until > CFG.announceWindowMinutes) continue;
+
+            if (dep.cancelled) {
+                const key = tripKey(dep, 'cancel');
+                if (!announced.has(key)) {
+                    announced.set(key, Date.now());
+                    enqueue(buildCancelText(dep), true); // Doppel-Gong
+                }
+                continue;
+            }
+
+            const delayMin = Math.round((dep.delay ?? 0) / 60);
+            if (delayMin >= CFG.minDelayMinutes) {
+                const key = tripKey(dep, `delay_${delayMin}`);
+                if (!announced.has(key)) {
+                    announced.set(key, Date.now());
+                    enqueue(buildDelayText(dep, delayMin));
+                }
+            }
+
+            if (until <= 2 && until >= 0) {
+                const key = tripKey(dep, 'depart');
+                if (!announced.has(key)) {
+                    announced.set(key, Date.now());
+                    enqueue(buildDepartureText(dep));
+                }
+            }
+        }
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       TOGGLE
+    ══════════════════════════════════════════════════════════════ */
+    function toggle() {
+        enabled = !enabled;
+        if (!enabled) { window.speechSynthesis.cancel(); queue = []; }
+        return enabled;
+    }
+
+    function isEnabled() { return enabled; }
+
+    /* ══════════════════════════════════════════════════════════════
+       DEMO
+    ══════════════════════════════════════════════════════════════ */
+    const DEMOS = [
+        {
+            type: 'delay',
+            dep: {
+                line: { name: 'RE3', product: 'regionalExp' },
+                direction: 'Düsseldorf Hbf',
+                delay: 13 * 60,
+                cancelled: false,
+                platform: '7',
+                plannedWhen: new Date(Date.now() - 3 * 60_000).toISOString(),
+            },
+        },
+        {
+            type: 'cancel',
+            dep: {
+                line: { name: 'RB32', product: 'regional' },
+                direction: 'Dortmund Hbf',
+                delay: 0,
+                cancelled: true,
+                platform: '13',
+                plannedWhen: new Date(Date.now() + 5 * 60_000).toISOString(),
+            },
+        },
+        {
+            type: 'depart',
+            dep: {
+                line: { name: 'ICE104', product: 'nationalExpress' },
+                direction: 'Hamburg Hbf',
+                delay: 0,
+                cancelled: false,
+                platform: '3',
+                plannedWhen: new Date(Date.now() + 1 * 60_000).toISOString(),
+            },
+        },
+        {
+            type: 'delay',
+            dep: {
+                line: { name: 'IC2045', product: 'national' },
+                direction: 'München Hbf',
+                delay: 27 * 60,
+                cancelled: false,
+                platform: '5',
+                plannedWhen: new Date(Date.now() - 10 * 60_000).toISOString(),
+            },
+        },
+        {
+            type: 'depart',
+            dep: {
+                line: { name: 'S3', product: 'suburban' },
+                direction: 'Hattingen(Ruhr) Mitte',
+                delay: 0,
+                cancelled: false,
+                platform: '10',
+                plannedWhen: new Date(Date.now() + 1 * 60_000).toISOString(),
+            },
+        },
+    ];
+
+    let lastDemoIdx = -1;
+
+    function playDemo() {
+        if (!ttsReady) { alert('Sprachausgabe nicht verfügbar.'); return null; }
+
+        let idx;
+        do { idx = Math.floor(Math.random() * DEMOS.length); }
+        while (idx === lastDemoIdx && DEMOS.length > 1);
+        lastDemoIdx = idx;
+
+        const { type, dep } = DEMOS[idx];
+        const delayMin = Math.round((dep.delay ?? 0) / 60);
+
+        let text, doubled = false;
+        if (dep.cancelled)      { text = buildCancelText(dep);          doubled = true; }
+        else if (delayMin >= 5) { text = buildDelayText(dep, delayMin); }
+        else                    { text = buildDepartureText(dep); }
+
+        console.log(`[Announcer] Demo: "${text}"`);
+
+        // Gong + Ansage
+        const utt    = new SpeechSynthesisUtterance(text);
+        utt.lang     = CFG.lang;
+        utt.rate     = CFG.rate;
+        utt.pitch    = CFG.pitch;
+        utt.volume   = CFG.volume;
+        if (voice) utt.voice = voice;
+
+        window.speechSynthesis.cancel();
+        playGong(doubled).then(() => window.speechSynthesis.speak(utt));
+
+        return utt;
+    }
+
+    return { processDepartures, toggle, isEnabled, playDemo };
+
+})();
