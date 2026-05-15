@@ -27,6 +27,9 @@ const CONFIG = {
 
   // Aktualisierungsintervall in Millisekunden (30 Sekunden)
   refreshInterval: 30_000,
+
+  // Anzeigemodus: 'trains' oder 'buses'
+  mode: 'trains',
 };
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -151,22 +154,15 @@ function fmtNow() {
 ════════════════════════════════════════════════════════════════════ */
 
 async function fetchDepartures() {
-  const url = new URL(`${CONFIG.apiBase}/stops/${CONFIG.stationId}/departures`);
-  url.searchParams.set('duration',  CONFIG.durationMinutes);
+  // Bus-Modus nutzt separaten VRR-Endpunkt
+  const endpoint = CONFIG.mode === 'buses'
+      ? `${CONFIG.apiBase}/stops/${CONFIG.stationId}/buses`
+      : `${CONFIG.apiBase}/stops/${CONFIG.stationId}/departures`;
+
+  const url = new URL(endpoint);
   url.searchParams.set('results',   CONFIG.maxRows);
   url.searchParams.set('language',  'de');
-
-  // Nur Züge anzeigen – Busse, Tram, U-Bahn ausblenden
-  url.searchParams.set('nationalExpress', 'true');   // ICE
-  url.searchParams.set('national',        'true');   // IC, EC
-  url.searchParams.set('regionalExp',     'true');   // RE
-  url.searchParams.set('regional',        'true');   // RB
-  url.searchParams.set('suburban',        'true');   // S-Bahn
-  url.searchParams.set('bus',             'false');
-  url.searchParams.set('ferry',           'false');
-  url.searchParams.set('subway',          'false');
-  url.searchParams.set('tram',            'false');
-  url.searchParams.set('taxi',            'false');
+  if (CONFIG.mode !== 'buses') url.searchParams.set('mode', CONFIG.mode);
 
   const response = await fetch(url.toString(), {
     headers: { 'Accept': 'application/json' },
@@ -305,6 +301,9 @@ function updateTicker(departures) {
 
   if (parts.length > 0) {
     elTicker.textContent = parts.join('   ·   ') + '   ·   ';
+  } else if (CONFIG.mode === 'buses') {
+    elTicker.textContent =
+        'Alle Busse fahren planmäßig.  ·  Bitte beachten Sie die Haltestellenanzeigen.  ·  ';
   } else {
     elTicker.textContent =
         'Alle Züge fahren planmäßig.  ·  Bitte beachten Sie Ansagen auf dem Bahnsteig.  ·  ' +
@@ -345,8 +344,8 @@ function renderDepartures(departures) {
 
   updateTicker(visible);
 
-  // Sprachansagen werden von index.html inline-script ausgeführt
-  if (window._announcer) window._announcer(visible);
+  // Sprachansagen: nur im Zug-Modus
+  if (CONFIG.mode === 'trains' && window._announcer) window._announcer(visible);
 
   elLastUpdate.textContent = fmtNow();
   elStationName.textContent = CONFIG.stationName;
@@ -399,6 +398,39 @@ function hide(el) { el.classList.add('hidden'); }
 /* ═══════════════════════════════════════════════════════════════════
    START – erst Station suchen, dann Daten laden
 ════════════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════════
+   MODUS WECHSELN (Züge ↔ Busse)
+════════════════════════════════════════════════════════════════════ */
+
+function switchMode(newMode) {
+  if (CONFIG.mode === newMode) return;
+  CONFIG.mode = newMode;
+
+  // Button-Optik aktualisieren
+  const btnTrains = document.getElementById('modeTrains');
+  const btnBuses  = document.getElementById('modeBuses');
+  if (btnTrains && btnBuses) {
+    btnTrains.classList.toggle('mode-active', newMode === 'trains');
+    btnBuses.classList.toggle('mode-active',  newMode === 'buses');
+  }
+
+  // Tabellenheader anpassen
+  const colType = document.querySelector('.col-type');
+  if (colType) colType.textContent = newMode === 'buses' ? 'Linie' : 'Zug';
+
+  // Announcer stoppen wenn auf Busse gewechselt
+  if (newMode === 'buses' && window.speechSynthesis) {
+    window.speechSynthesis.cancel();
+  }
+
+  // Sofort neu laden
+  isFirstLoad = true;
+  show(elLoadingMsg);
+  hide(elDeptList);
+  hide(elErrorMsg);
+  load();
+}
 
 async function init() {
   show(elLoadingMsg);

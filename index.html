@@ -27,6 +27,10 @@
     </div>
   </div>
   <div class="header-buttons">
+    <button class="mode-toggle-btn" id="modeToggle" title="Zu Busse wechseln">
+      <span class="btn-icon">🚌</span>
+      <span class="btn-label">Busse</span>
+    </button>
     <button class="sound-toggle" id="soundToggle" title="Ansagen ausschalten">
       <span class="btn-icon">🔊</span>
       <span class="btn-label">Ansagen AN</span>
@@ -510,8 +514,33 @@
       Announcer.processDepartures(deps);
     };
 
+    var btnToggle = document.getElementById('modeToggle');
     var btnSound = document.getElementById('soundToggle');
     var btnDemo  = document.getElementById('demoBtn');
+
+    /* ── Modus-Toggle ───────────────────────────────────────────── */
+    function updateModeUI(mode) {
+      var isBus = (mode === 'buses');
+      if (btnToggle) {
+        btnToggle.querySelector('.btn-icon').textContent  = isBus ? '🚆' : '🚌';
+        btnToggle.querySelector('.btn-label').textContent = isBus ? 'Züge' : 'Busse';
+        btnToggle.title = isBus ? 'Zu Züge wechseln' : 'Zu Busse wechseln';
+        btnToggle.classList.toggle('bus-active', isBus);
+      }
+      document.body.classList.toggle('bus-mode', isBus);
+      if (btnSound) btnSound.style.display = isBus ? 'none' : '';
+      if (btnDemo)  btnDemo.style.display  = isBus ? 'none' : '';
+    }
+    if (btnToggle) {
+      btnToggle.onclick = function() {
+        var cur  = (typeof CONFIG !== 'undefined') ? CONFIG.mode : 'trains';
+        var next = (cur === 'trains') ? 'buses' : 'trains';
+        if (typeof switchMode === 'function') switchMode(next);
+        updateModeUI(next);
+        console.log('[Mode] gewechselt zu:', next);
+      };
+      console.log('[Buttons] Mode-Toggle bereit ✓');
+    }
 
     /* ── Sound-Toggle ──────────────────────────────────────── */
     if (btnSound) {

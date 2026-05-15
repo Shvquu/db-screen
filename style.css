@@ -555,3 +555,50 @@ body::before {
   font-size: 0.85rem;
   opacity: 0.5;
 }
+
+
+/* ── Modus-Toggle Button (einzeln) ─────────────────────────────── */
+.mode-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.8rem;
+  border-radius: 6px;
+  border: 1px solid var(--orange);
+  background: transparent;
+  color: var(--orange);
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  box-shadow: 0 0 5px #ff8c0033;
+}
+
+.mode-toggle-btn:hover {
+  background: #1a1000;
+  box-shadow: 0 0 10px #ff8c0055;
+}
+
+/* Bus-Modus aktiv: lila */
+.mode-toggle-btn.bus-active {
+  border-color: #9b59b6;
+  color: #9b59b6;
+  box-shadow: 0 0 6px #9b59b655;
+}
+.mode-toggle-btn.bus-active:hover {
+  background: #0d0014;
+}
+
+/* Body im Bus-Modus: lila Akzente */
+body.bus-mode .board-header  { border-bottom-color: #9b59b6; box-shadow: 0 2px 20px #9b59b633; }
+body.bus-mode .board-footer  { border-top-color:    #9b59b6; box-shadow: 0 -2px 15px #9b59b622; }
+body.bus-mode .table-header  { border-bottom-color: #2a1a33; }
+
+@media (max-width: 600px) {
+  .mode-toggle-btn { padding: 0.3rem 0.5rem; }
+  .mode-toggle-btn .btn-label { display: none; }
+}
