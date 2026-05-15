@@ -103,8 +103,7 @@ function fmtTime(isoStr) {
  */
 function calcDelay(planned, actual) {
   if (!planned || !actual) return null;
-  const diff = Math.round((new Date(actual) - new Date(planned)) / 60_000);
-  return diff;
+  return Math.round((new Date(actual) - new Date(planned)) / 60_000);
 }
 
 /**
@@ -196,7 +195,13 @@ function buildRow(dep, index) {
 
   const planned = dep.plannedWhen ?? dep.when;
   const actual  = dep.when ?? dep.plannedWhen;
-  const delay   = calcDelay(planned, actual);   // Minuten (kann null sein)
+  // Verspätung: erst aus Timestamps berechnen, dann dep.delay als Fallback
+  let delay = calcDelay(planned, actual);
+  if ((delay === null || delay === 0) && dep.delay) {
+    // dep.delay kommt in Sekunden (FPTF) → in Minuten umrechnen
+    const fallback = Math.round(dep.delay / 60);
+    if (fallback !== 0) delay = fallback;
+  }
 
   const timeStr    = fmtTime(planned);
   const badge      = trainBadge(dep.line);
@@ -205,7 +210,7 @@ function buildRow(dep, index) {
   // Gleis
   const platform        = dep.plannedPlatform ?? dep.platform ?? '–';
   const platformChanged = dep.platform && dep.plannedPlatform &&
-                          dep.platform !== dep.plannedPlatform;
+      dep.platform !== dep.plannedPlatform;
 
   // Info-Text
   let infoText = '';
@@ -243,14 +248,14 @@ function buildRow(dep, index) {
   /* ── Info-Lauftext ───────────────────────────────────────────── */
   const infoClass = infoText.length > 30 ? 'ticker-inner running' : 'ticker-inner';
   const infoHTML  = infoText
-    ? `<span class="${infoClass}">${infoText}</span>`
-    : '';
+      ? `<span class="${infoClass}">${infoText}</span>`
+      : '';
 
   /* ── Plattform ───────────────────────────────────────────────── */
   const platClass = platformChanged ? 'dep-platform changed' : 'dep-platform';
   const platLabel = platformChanged
-    ? `⟶${dep.platform}`
-    : platform;
+      ? `⟶${dep.platform}`
+      : platform;
 
   /* ── HTML zusammenbauen ──────────────────────────────────────── */
   const row = document.createElement('div');
@@ -298,8 +303,8 @@ function updateTicker(departures) {
     elTicker.textContent = parts.join('   ·   ') + '   ·   ';
   } else {
     elTicker.textContent =
-      'Alle Züge fahren planmäßig.  ·  Bitte beachten Sie Ansagen auf dem Bahnsteig.  ·  ' +
-      'Please listen to platform announcements.  ·  ';
+        'Alle Züge fahren planmäßig.  ·  Bitte beachten Sie Ansagen auf dem Bahnsteig.  ·  ' +
+        'Please listen to platform announcements.  ·  ';
   }
 }
 
@@ -318,8 +323,8 @@ function renderDepartures(departures) {
   // Nur künftige (oder max. 2 Min. in der Vergangenheit)
   const cutoff = Date.now() - 2 * 60_000;
   const visible = departures
-    .filter(d => new Date(d.when ?? d.plannedWhen ?? 0).getTime() >= cutoff)
-    .slice(0, CONFIG.maxRows);
+      .filter(d => new Date(d.when ?? d.plannedWhen ?? 0).getTime() >= cutoff)
+      .slice(0, CONFIG.maxRows);
 
   elDeptList.innerHTML = '';
 
@@ -369,13 +374,13 @@ async function load() {
     if (isFirstLoad) {
       hide(elLoadingMsg);
       elErrorText.textContent =
-        `API nicht erreichbar: ${err.message}. ` +
-        `Starten Sie den Proxy (node proxy.js) oder prüfen Sie Ihre Verbindung.`;
+          `API nicht erreichbar: ${err.message}. ` +
+          `Starten Sie den Proxy (node proxy.js) oder prüfen Sie Ihre Verbindung.`;
       show(elErrorMsg);
     } else {
       // Im Hintergund-Refresh: alten Inhalt behalten, Fehler in Ticker
       elTicker.textContent =
-        '⚠ Aktualisierung fehlgeschlagen – zeige zuletzt geladene Daten  ·  ';
+          '⚠ Aktualisierung fehlgeschlagen – zeige zuletzt geladene Daten  ·  ';
     }
   }
 }
@@ -414,7 +419,7 @@ init();
 
 // Tastaturkürzel: F5 = manuell aktualisieren, F = Vollbild
 document.addEventListener('keydown', e => {
-  if (e.key === 'F5') { e.preventDefault(); load(); }
+  if (e.key === 'F5') { e.preventDefault(); load().then(r => null); }
   if (e.key === 'f' || e.key === 'F') {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch(() => {});
