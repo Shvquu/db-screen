@@ -8,79 +8,392 @@
 </head>
 <body>
 
-  <!-- ═══════════════════════════════════════════════════════════
-       KOPFZEILE: Bahnhofsname + Uhrzeit
-  ════════════════════════════════════════════════════════════ -->
-  <header class="board-header">
-    <div class="header-left">
-      <span class="db-logo">DB</span>
-      <div class="station-info">
-        <span class="station-label">Abfahrt · Departures</span>
-        <span class="station-name" id="stationName">Oberhausen Hbf</span>
-      </div>
+<header class="board-header">
+  <div class="header-left">
+    <span class="db-logo">DB</span>
+    <div class="station-info">
+      <span class="station-label">Abfahrt · Departures</span>
+      <span class="station-name" id="stationName">Oberhausen Hbf</span>
     </div>
-    <div class="header-right">
-      <div class="clock-wrapper">
-        <span class="clock-label">Uhrzeit</span>
-        <span class="clock" id="clock">00:00:00</span>
-      </div>
-      <div class="refresh-info">
-        <span class="refresh-label">Aktualisiert:</span>
-        <span id="lastUpdate">–</span>
-      </div>
-    </div>
-  </header>
-
-  <!-- ═══════════════════════════════════════════════════════════
-       TABELLENKÖPFE
-  ════════════════════════════════════════════════════════════ -->
-  <div class="table-header">
-    <div class="col-time">Zeit</div>
-    <div class="col-delay">+/−</div>
-    <div class="col-type">Zug</div>
-    <div class="col-destination">Ziel</div>
-    <div class="col-platform">Gl.</div>
-    <div class="col-info">Info</div>
   </div>
-
-  <!-- ═══════════════════════════════════════════════════════════
-       HAUPTINHALT: Abfahrtsliste
-  ════════════════════════════════════════════════════════════ -->
-  <main class="board-body" id="boardBody">
-
-    <!-- Ladezustand -->
-    <div class="status-message" id="loadingMsg">
-      <div class="spinner"></div>
-      <span>Verbinde mit Fahrplandaten …</span>
+  <div class="header-right">
+    <div class="clock-wrapper">
+      <span class="clock-label">Uhrzeit</span>
+      <span class="clock" id="clock">00:00:00</span>
     </div>
-
-    <!-- Fehlerzustand -->
-    <div class="status-message hidden" id="errorMsg">
-      <span class="error-icon">⚠</span>
-      <span id="errorText">Verbindung fehlgeschlagen.</span>
+    <div class="refresh-info">
+      <span class="refresh-label">Aktualisiert:</span>
+      <span id="lastUpdate">–</span>
     </div>
+  </div>
+  <div class="header-buttons">
+    <button class="sound-toggle" id="soundToggle" title="Ansagen ausschalten">
+      <span class="btn-icon">🔊</span>
+      <span class="btn-label">Ansagen AN</span>
+    </button>
+    <button class="demo-btn" id="demoBtn" title="Zufällige Demo-Ansage abspielen">
+      <span class="btn-icon">▶</span>
+      <span class="btn-label">Demo</span>
+    </button>
+  </div>
+</header>
 
-    <!-- Abfahrten werden hier per JS eingefügt -->
-    <div id="departureList" class="hidden"></div>
+<div class="table-header">
+  <div class="col-time">Zeit</div>
+  <div class="col-delay">+/−</div>
+  <div class="col-type">Zug</div>
+  <div class="col-destination">Ziel</div>
+  <div class="col-platform">Gl.</div>
+  <div class="col-info">Info</div>
+</div>
 
-  </main>
+<main class="board-body" id="boardBody">
+  <div class="status-message" id="loadingMsg">
+    <div class="spinner"></div>
+    <span>Verbinde mit Fahrplandaten …</span>
+  </div>
+  <div class="status-message hidden" id="errorMsg">
+    <span class="error-icon">⚠</span>
+    <span id="errorText">Verbindung fehlgeschlagen.</span>
+  </div>
+  <div id="departureList" class="hidden"></div>
+</main>
 
-  <!-- ═══════════════════════════════════════════════════════════
-       FUSSZEILE: Lauftext für Meldungen
-  ════════════════════════════════════════════════════════════ -->
-  <footer class="board-footer">
-    <div class="ticker-wrapper">
-      <span class="ticker-label">Hinweise:</span>
-      <div class="ticker-track">
+<footer class="board-footer">
+  <div class="ticker-wrapper">
+    <span class="ticker-label">Hinweise:</span>
+    <div class="ticker-track">
         <span class="ticker-content" id="tickerContent">
           Bitte beachten Sie Ansagen auf dem Bahnsteig. &nbsp;&nbsp;·&nbsp;&nbsp;
           Please listen to announcements on the platform. &nbsp;&nbsp;·&nbsp;&nbsp;
           Alle Angaben ohne Gewähr – Live-Daten via transport.rest
         </span>
-      </div>
     </div>
-  </footer>
+  </div>
+</footer>
 
-  <script src="script.js"></script>
+<!-- Announcer eingebettet – keine externe Datei nötig -->
+<script>
+  /**
+   * announcer.js – Automatische Bahnhofsansagen (Web Speech API)
+   */
+  'use strict';
+
+  const Announcer = (() => {
+
+    const CFG = {
+      lang:               'de-DE',
+      rate:               0.88,
+      pitch:              1.0,
+      volume:             1.0,
+      minDelayMinutes:    5,
+      announceWindowMinutes: 30,
+      pauseBetween:       1200,
+    };
+
+    const announced = new Map();
+    let queue       = [];
+    let isSpeaking  = false;
+    let enabled     = true;
+    let voice       = null;
+    let ttsReady    = false;
+
+    /* ── Verfügbarkeit prüfen ──────────────────────────────────────── */
+    if (!('speechSynthesis' in window)) {
+      console.warn('[Announcer] speechSynthesis nicht verfügbar.');
+    } else {
+      ttsReady = true;
+      console.log('[Announcer] speechSynthesis verfügbar ✓');
+    }
+
+    /* ── Stimme laden ──────────────────────────────────────────────── */
+    function loadVoice() {
+      const voices = window.speechSynthesis.getVoices();
+      if (voices.length === 0) return; // noch nicht geladen
+      voice = voices.find(v => v.lang === 'de-DE' && v.localService)
+              ?? voices.find(v => v.lang === 'de-DE')
+              ?? voices.find(v => v.lang.startsWith('de'))
+              ?? voices[0]
+              ?? null;
+      console.log(`[Announcer] Stimme: ${voice ? voice.name + ' (' + voice.lang + ')' : 'keine'}`);
+    }
+
+    // Stimmen sofort + bei onvoiceschanged laden
+    loadVoice();
+    window.speechSynthesis.onvoiceschanged = loadVoice;
+
+    /* ── Text sprechen ─────────────────────────────────────────────── */
+    function speakNow(text) {
+      return new Promise(resolve => {
+        window.speechSynthesis.cancel(); // vorherige stoppen
+        const utt    = new SpeechSynthesisUtterance(text);
+        utt.lang     = CFG.lang;
+        utt.rate     = CFG.rate;
+        utt.pitch    = CFG.pitch;
+        utt.volume   = CFG.volume;
+        if (voice) utt.voice = voice;
+        utt.onend    = () => setTimeout(resolve, CFG.pauseBetween);
+        utt.onerror  = (e) => { console.error('[Announcer] TTS Fehler:', e); resolve(); };
+        console.log(`[Announcer] spricht: "${text.slice(0, 60)}..."`);
+        window.speechSynthesis.speak(utt);
+      });
+    }
+
+    async function processQueue() {
+      if (isSpeaking || queue.length === 0) return;
+      isSpeaking = true;
+      while (queue.length > 0 && enabled) {
+        await speakNow(queue.shift());
+      }
+      isSpeaking = false;
+    }
+
+    function enqueue(text) {
+      if (!enabled || !ttsReady) return;
+      queue.push(text);
+      processQueue();
+    }
+
+    /* ── Text-Helfer ───────────────────────────────────────────────── */
+    function cleanStation(name) {
+      return (name || '')
+              .replace(/\(([^)]+)\)/g, ' $1 ')
+              .replace(/\bHbf\b/gi, 'Hauptbahnhof')
+              .replace(/\bBhf\b/gi, 'Bahnhof')
+              .replace(/\s+/g, ' ').trim();
+    }
+
+    function cleanLine(name) {
+      const n = (name || '').trim();
+      if (/^S\s?\d/.test(n)) return 'die ' + n.replace(/^S\s?/, 'S ');
+      return 'der ' + n;
+    }
+
+    function spokenTime(isoStr) {
+      if (!isoStr) return '';
+      const p = new Intl.DateTimeFormat('de-DE', {
+        timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit', hour12: false,
+      }).formatToParts(new Date(isoStr));
+      const hh = p.find(x => x.type === 'hour')?.value   ?? '0';
+      const mm = p.find(x => x.type === 'minute')?.value ?? '00';
+      return mm === '00' ? `${parseInt(hh)} Uhr` : `${parseInt(hh)} Uhr ${mm}`;
+    }
+
+    function buildDelayText(dep, delayMin) {
+      const line = cleanLine(dep.line?.name ?? '');
+      const dest = cleanStation(dep.direction ?? '');
+      const plat = dep.platform ?? dep.plannedPlatform;
+      const time = spokenTime(dep.plannedWhen);
+      const min  = `${delayMin} ${delayMin === 1 ? 'Minute' : 'Minuten'}`;
+      return `Achtung${plat ? ' auf Gleis ' + plat : ''}. `
+              + `${line} nach ${dest} hat heute circa ${min} Verspätung. `
+              + `Planmäßige Abfahrt war ${time}.`;
+    }
+
+    function buildCancelText(dep) {
+      const line = cleanLine(dep.line?.name ?? '');
+      const dest = cleanStation(dep.direction ?? '');
+      const time = spokenTime(dep.plannedWhen);
+      return `Achtung. ${line} nach ${dest}, planmäßige Abfahrt ${time}, `
+              + `fällt heute aus. Wir bitten um Entschuldigung.`;
+    }
+
+    function buildDepartureText(dep) {
+      const line = cleanLine(dep.line?.name ?? '');
+      const dest = cleanStation(dep.direction ?? '');
+      const plat = dep.platform ?? dep.plannedPlatform;
+      return plat
+              ? `${line} nach ${dest} fährt in Kürze von Gleis ${plat} ab.`
+              : `${line} nach ${dest} fährt in Kürze ab.`;
+    }
+
+    function tripKey(dep, type) {
+      return `${type}|${dep.line?.name}|${dep.plannedWhen}`;
+    }
+
+    function minutesUntil(isoStr) {
+      if (!isoStr) return Infinity;
+      return (new Date(isoStr).getTime() - Date.now()) / 60_000;
+    }
+
+    /* ── Echtzeit-Verarbeitung ─────────────────────────────────────── */
+    function processDepartures(departures) {
+      if (!enabled || !ttsReady) return;
+      const cutoff = Date.now() - 2 * 3_600_000;
+      for (const [k, t] of announced) { if (t < cutoff) announced.delete(k); }
+
+      for (const dep of departures) {
+        const when  = dep.when ?? dep.plannedWhen;
+        const until = minutesUntil(when);
+        if (until < 0 || until > CFG.announceWindowMinutes) continue;
+
+        if (dep.cancelled) {
+          const key = tripKey(dep, 'cancel');
+          if (!announced.has(key)) { announced.set(key, Date.now()); enqueue(buildCancelText(dep)); }
+          continue;
+        }
+
+        const delayMin = Math.round((dep.delay ?? 0) / 60);
+        if (delayMin >= CFG.minDelayMinutes) {
+          const key = tripKey(dep, `delay_${delayMin}`);
+          if (!announced.has(key)) { announced.set(key, Date.now()); enqueue(buildDelayText(dep, delayMin)); }
+        }
+
+        if (until <= 2) {
+          const key = tripKey(dep, 'depart');
+          if (!announced.has(key)) { announced.set(key, Date.now()); enqueue(buildDepartureText(dep)); }
+        }
+      }
+    }
+
+    /* ── Toggle ────────────────────────────────────────────────────── */
+    function toggle() {
+      enabled = !enabled;
+      if (!enabled) { window.speechSynthesis.cancel(); queue = []; }
+      console.log(`[Announcer] ${enabled ? 'AN' : 'AUS'}`);
+      return enabled;
+    }
+
+    function isEnabled() { return enabled; }
+
+    /* ── Demo ──────────────────────────────────────────────────────── */
+    const DEMOS = [
+      {
+        line: { name: 'ICE 104', product: 'nationalExpress' },
+        direction: 'Hamburg Hbf', delay: 0, cancelled: false,
+        platform: '3', plannedPlatform: '3',
+        plannedWhen: new Date(Date.now() + 8 * 60_000).toISOString(),
+        type: 'depart',
+      },
+      {
+        line: { name: 'RE 3', product: 'regionalExp' },
+        direction: 'Düsseldorf Hbf', delay: 13 * 60, cancelled: false,
+        platform: '7', plannedPlatform: '7',
+        plannedWhen: new Date(Date.now() - 5 * 60_000).toISOString(),
+        type: 'delay',
+      },
+      {
+        line: { name: 'RB 32', product: 'regional' },
+        direction: 'Dortmund Hbf', delay: 0, cancelled: true,
+        platform: '13', plannedPlatform: '13',
+        plannedWhen: new Date(Date.now() + 5 * 60_000).toISOString(),
+        type: 'cancel',
+      },
+      {
+        line: { name: 'S S3', product: 'suburban' },
+        direction: 'Hattingen(Ruhr) Mitte', delay: 0, cancelled: false,
+        platform: '10', plannedPlatform: '10',
+        plannedWhen: new Date(Date.now() + 1 * 60_000).toISOString(),
+        type: 'depart',
+      },
+      {
+        line: { name: 'IC 2045', product: 'national' },
+        direction: 'München Hbf', delay: 27 * 60, cancelled: false,
+        platform: '5', plannedPlatform: '5',
+        plannedWhen: new Date(Date.now() - 10 * 60_000).toISOString(),
+        type: 'delay',
+      },
+    ];
+
+    let lastDemoIdx = -1;
+
+    function playDemo() {
+      if (!ttsReady) {
+        alert('Sprachausgabe wird von diesem Browser nicht unterstützt.');
+        return null;
+      }
+
+      let idx;
+      do { idx = Math.floor(Math.random() * DEMOS.length); }
+      while (idx === lastDemoIdx && DEMOS.length > 1);
+      lastDemoIdx = idx;
+
+      const dep = {
+        ...DEMOS[idx],
+        // plannedWhen immer frisch berechnen
+        plannedWhen: DEMOS[idx].type === 'delay'
+                ? new Date(Date.now() - 5 * 60_000).toISOString()
+                : new Date(Date.now() + 5 * 60_000).toISOString(),
+      };
+
+      const delayMin = Math.round((dep.delay ?? 0) / 60);
+      let text;
+      if (dep.cancelled)        text = buildCancelText(dep);
+      else if (delayMin >= 5)   text = buildDelayText(dep, delayMin);
+      else                      text = buildDepartureText(dep);
+
+      console.log(`[Announcer] Demo #${idx}: "${text}"`);
+
+      window.speechSynthesis.cancel();
+      const utt    = new SpeechSynthesisUtterance(text);
+      utt.lang     = CFG.lang;
+      utt.rate     = CFG.rate;
+      utt.pitch    = CFG.pitch;
+      utt.volume   = CFG.volume;
+      if (voice) utt.voice = voice;
+      window.speechSynthesis.speak(utt);
+      return utt;
+    }
+
+    return { processDepartures, toggle, isEnabled, playDemo };
+  })();
+
+</script>
+
+<script src="script.js"></script>
+
+<!-- Button-Logik -->
+<script>
+  window.addEventListener('load', function () {
+
+    // Announcer für script.js zugänglich machen
+    window._announcer = function(deps) {
+      Announcer.processDepartures(deps);
+    };
+
+    var btnSound = document.getElementById('soundToggle');
+    var btnDemo  = document.getElementById('demoBtn');
+
+    /* ── Sound-Toggle ──────────────────────────────────────── */
+    if (btnSound) {
+      btnSound.onclick = function () {
+        var on = Announcer.toggle();
+        btnSound.querySelector('.btn-icon').textContent  = on ? '🔊' : '🔇';
+        btnSound.querySelector('.btn-label').textContent = on ? 'Ansagen AN' : 'Ansagen AUS';
+        btnSound.classList.toggle('muted', !on);
+        console.log('[Sound] ' + (on ? 'AN' : 'AUS'));
+      };
+    }
+
+    /* ── Demo-Button ───────────────────────────────────────── */
+    if (btnDemo) {
+      btnDemo.onclick = function () {
+        if (btnDemo.classList.contains('playing')) {
+          window.speechSynthesis.cancel();
+          resetDemo();
+          return;
+        }
+
+        var utt = Announcer.playDemo();
+        if (!utt) return;
+
+        btnDemo.classList.add('playing');
+        btnDemo.querySelector('.btn-icon').textContent  = '⏹';
+        btnDemo.querySelector('.btn-label').textContent = 'Spielt…';
+
+        function resetDemo() {
+          btnDemo.classList.remove('playing');
+          btnDemo.querySelector('.btn-icon').textContent  = '▶';
+          btnDemo.querySelector('.btn-label').textContent = 'Demo';
+        }
+        utt.addEventListener('end',   resetDemo);
+        utt.addEventListener('error', resetDemo);
+      };
+    }
+
+    console.log('[Buttons] bereit ✓  speechSynthesis:', 'speechSynthesis' in window);
+  });
+</script>
+
 </body>
 </html>
