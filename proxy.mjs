@@ -111,32 +111,41 @@ function convertDepartures(raw) {
   ]);
 
   return raw
-    .map(d => {
-      const product = detectProduct(d.train ?? '');
-      if (!product || !TRAIN_PRODUCTS.has(product)) return null;
+      .map(d => {
+        const product = detectProduct(d.train ?? '');
+        if (!product || !TRAIN_PRODUCTS.has(product)) return null;
 
-      const plannedWhen = toISO(d.scheduledDeparture);
-      const delayMin    = typeof d.delay === 'number' ? d.delay : 0;
-      const actualWhen  = plannedWhen
-        ? new Date(new Date(plannedWhen).getTime() + delayMin * 60_000).toISOString()
-        : plannedWhen;
+        // plannedWhen = geplante Zeit, when = tatsächliche Zeit (mit Verspätung)
+        const plannedWhen = toISO(d.scheduledDeparture);
+        // DBF liefert delayDeparture (Minuten, Zahl)
+        const delayMin = typeof d.delayDeparture === 'number' ? d.delayDeparture
+            : typeof d.delay          === 'number' ? d.delay
+                : 0;
 
-      return {
-        direction:       d.destination ?? null,
-        plannedWhen,
-        when:            actualWhen,
-        delay:           delayMin * 60, // in Sekunden (wie FPTF)
-        cancelled:       d.isCancelled ?? false,
-        plannedPlatform: d.scheduledPlatform ?? null,
-        platform:        d.platform ?? d.scheduledPlatform ?? null,
-        line: {
-          name:    d.train ?? '',
-          product,
-          mode:    'train',
-        },
-      };
-    })
-    .filter(Boolean);
+        // Tatsächliche Abfahrtszeit = geplant + Verspätung
+        const actualWhen = plannedWhen && delayMin !== 0
+            ? new Date(new Date(plannedWhen).getTime() + delayMin * 60_000).toISOString()
+            : plannedWhen;
+
+        // isCancelled ist 0/1 (Zahl) bei DBF, kein Boolean
+        const cancelled = !!(d.isCancelled || d.cancelled);
+
+        return {
+          direction:       d.destination ?? null,
+          plannedWhen,
+          when:            actualWhen,
+          delay:           delayMin * 60, // in Sekunden (FPTF-kompatibel)
+          cancelled,
+          plannedPlatform: d.scheduledPlatform ?? null,
+          platform:        d.platform ?? d.scheduledPlatform ?? null,
+          line: {
+            name:    d.train ?? '',
+            product,
+            mode:    'train',
+          },
+        };
+      })
+      .filter(Boolean);
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -146,7 +155,7 @@ function convertDepartures(raw) {
 app.get('/api/locations', (req, res) => {
   const query = (req.query.query ?? '').trim().toLowerCase();
   const s = STATIONS[query]
-    ?? Object.values(STATIONS).find(x => x.name.toLowerCase().includes(query));
+      ?? Object.values(STATIONS).find(x => x.name.toLowerCase().includes(query));
   if (!s) return res.status(404).json({ error: `Nicht gefunden: ${query}` });
   res.json([{ type: 'stop', id: s.id, name: s.name }]);
 });
@@ -164,6 +173,33 @@ app.get('/api/stops/:id/departures', async (req, res) => {
     res.json({ departures });
   } catch (err) {
     console.error('[departures] Fehler:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Debug: zeigt rohe DBF-Antwort für die ersten 3 Einträge
+app.get('/debug', async (_req, res) => {
+  try {
+    const url = 'https://dbf.finalrewind.org/EOB.json?version=3&limit=5';
+    const r   = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' } });
+    const data = await r.json();
+    // Zeige rohe Felder der ersten Abfahrten
+    const sample = (data.departures ?? []).slice(0, 5).map(d => ({
+      train:             d.train,
+      scheduledDeparture:d.scheduledDeparture,
+      departure:         d.departure,
+      delay:             d.delay,
+      delayDeparture:    d.delayDeparture,
+      isCancelled:       d.isCancelled,
+      cancelled:         d.cancelled,
+      scheduledPlatform: d.scheduledPlatform,
+      platform:          d.platform,
+      destination:       d.destination,
+      // alle Keys zeigen
+      _allKeys: Object.keys(d),
+    }));
+    res.json({ raw: sample });
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
