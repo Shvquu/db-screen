@@ -548,3 +548,10 @@ body::before {
   .btn-label { display: none; }
   .sound-toggle, .demo-btn { padding: 0.3rem 0.5rem; }
 }
+
+/* ── Unbekanntes Gleis ───────────────────────────────────────────── */
+.dep-platform.unknown {
+  color: var(--gray);
+  font-size: 0.85rem;
+  opacity: 0.5;
+}
