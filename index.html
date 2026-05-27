@@ -35,10 +35,20 @@
       <span class="btn-icon">🔊</span>
       <span class="btn-label">Ansagen AN</span>
     </button>
-    <button class="demo-btn" id="demoBtn" title="Zufällige Demo-Ansage abspielen">
-      <span class="btn-icon">▶</span>
-      <span class="btn-label">Demo</span>
-    </button>
+    <div class="demo-group">
+      <select class="demo-select" id="demoSelect">
+        <option value="random">🎲 Zufällig</option>
+        <option value="0">🚆 Abfahrt – ICE 104</option>
+        <option value="1">⚠ Verspätung – RE3 +13 Min</option>
+        <option value="2">❌ Ausfall – RB32</option>
+        <option value="3">🚆 Abfahrt – S3</option>
+        <option value="4">⚠ Verspätung – IC2045 +27 Min</option>
+      </select>
+      <button class="demo-btn" id="demoBtn" title="Demo abspielen">
+        <span class="btn-icon">▶</span>
+        <span class="btn-label">Play</span>
+      </button>
+    </div>
   </div>
 </header>
 
@@ -465,12 +475,16 @@
 
     let lastDemoIdx = -1;
 
-    function playDemo() {
+    function playDemo(forceIdx) {
       if (!ttsReady) { alert('Sprachausgabe nicht verfügbar.'); return null; }
 
       let idx;
-      do { idx = Math.floor(Math.random() * DEMOS.length); }
-      while (idx === lastDemoIdx && DEMOS.length > 1);
+      if (forceIdx !== undefined && forceIdx >= 0 && forceIdx < DEMOS.length) {
+        idx = forceIdx;
+      } else {
+        do { idx = Math.floor(Math.random() * DEMOS.length); }
+        while (idx === lastDemoIdx && DEMOS.length > 1);
+      }
       lastDemoIdx = idx;
 
       const { type, dep } = DEMOS[idx];

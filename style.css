@@ -602,3 +602,66 @@ body.bus-mode .table-header  { border-bottom-color: #2a1a33; }
   .mode-toggle-btn { padding: 0.3rem 0.5rem; }
   .mode-toggle-btn .btn-label { display: none; }
 }
+
+/* ── Demo-Gruppe (Dropdown + Play-Button) ────────────────────────── */
+.demo-group {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border: 1px solid var(--green);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.demo-select {
+  background: #0a0a0a;
+  color: var(--green);
+  border: none;
+  border-right: 1px solid var(--green);
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 0.3rem 0.5rem;
+  cursor: pointer;
+  outline: none;
+  max-width: 11rem;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2322dd44'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.4rem center;
+  padding-right: 1.4rem;
+}
+
+.demo-select:focus { box-shadow: none; }
+
+.demo-select option {
+  background: #111;
+  color: var(--green);
+}
+
+.demo-group .demo-btn {
+  border: none;
+  border-radius: 0;
+  border-color: transparent;
+  margin: 0;
+  color: var(--green);
+  padding: 0.3rem 0.6rem;
+}
+
+.demo-group .demo-btn:hover {
+  background: #001a06;
+}
+
+.demo-group .demo-btn.playing {
+  animation: pulse-green 1s ease-in-out infinite;
+}
+
+@media (max-width: 768px) {
+  .demo-select { max-width: 7rem; font-size: 0.65rem; }
+}
+@media (max-width: 600px) {
+  .demo-select { max-width: 5rem; }
+  .demo-group .demo-btn .btn-label { display: none; }
+}
