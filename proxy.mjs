@@ -188,9 +188,19 @@ app.get('/api/stops/:id/departures', async (req, res) => {
   console.log(`[departures] DS100 ${id} · Modus: ${mode}`);
 
   try {
-    const raw        = await fetchDBF(id, results + 15);
-    const departures = convertDepartures(raw, mode).slice(0, results);
-    console.log(`[departures] ${raw.length} gesamt → ${departures.length} (${mode})`);
+    const raw      = await fetchDBF(id, results + 15);
+    const filtered = convertDepartures(raw, mode);
+
+    // Duplikate entfernen: gleiche Linie + gleiche Planzeit + gleicher Zielort
+    const seen = new Set();
+    const departures = filtered.filter(d => {
+      const key = `${d.line?.name}|${d.plannedWhen?.slice(0,16)}|${d.direction}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }).slice(0, results);
+
+    console.log(`[departures] ${raw.length} roh → ${filtered.length} gefiltert → ${departures.length} nach Dedup`);
     res.json({ departures });
   } catch (err) {
     console.error('[departures] Fehler:', err.message);
@@ -260,7 +270,7 @@ async function resolveVRRStopId(stationName) {
   url.searchParams.set('name_sf',      stationName);
   url.searchParams.set('language',     'de');
 
-  //console.log(`[VRR Stopfinder] ${url}`);
+  console.log(`[VRR Stopfinder] ${url}`);
   const res  = await fetch(url.toString(), {
     headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' },
     signal: AbortSignal.timeout(8_000),
@@ -270,17 +280,21 @@ async function resolveVRRStopId(stationName) {
 
   // Ersten passenden Stop nehmen
   const locations = data?.locations ?? data?.stopFinder?.points ?? [];
-  //console.log(`[VRR Stopfinder] ${locations.length} Treffer`);
+  console.log(`[VRR Stopfinder] ${locations.length} Treffer`);
   if (locations.length > 0) {
     console.log('[VRR Stopfinder] Erster Treffer:', JSON.stringify(locations[0]).slice(0, 200));
   }
 
-  const stop = locations.find(l => l.type === 'stop' || l.type === 'platform' || l.isGlobalId)
+  // Besten Treffer wählen: type=stop mit höchster matchQuality
+  const stops = locations.filter(l => l.type === 'stop');
+  const stop  = stops.sort((a,b) => (b.matchQuality??0)-(a.matchQuality??0))[0]
       ?? locations[0];
   if (!stop) throw new Error(`Keine VRR-Haltestelle für "${stationName}"`);
 
+  // Globale ID bevorzugen (z.B. de:05119:14016)
   const stopId = stop.id ?? stop.stateless ?? stop.stopId;
-  //console.log(`[VRR] "${stationName}" → Stop-ID: ${stopId}`);
+  console.log(`[VRR] Haltestelle: ${stop.name} (${stopId})`);
+  console.log(`[VRR] "${stationName}" → Stop-ID: ${stopId}`);
   vrrStopIdCache[stationName] = stopId;
   return stopId;
 }
@@ -302,17 +316,18 @@ async function fetchVRRBuses(ds100, limit = 25) {
   }).format(now).replace(':', '');
 
   const url = new URL('https://efa.vrr.de/vrr/XSLT_DM_REQUEST');
-  url.searchParams.set('outputFormat',   'rapidJSON');
-  url.searchParams.set('language',       'de');
-  url.searchParams.set('type_dm',        'stopID');
-  url.searchParams.set('name_dm',        stopId);
-  url.searchParams.set('mode',           'direct');
-  url.searchParams.set('useRealtime',    '1');
-  url.searchParams.set('limit',          String(limit + 10));
-  url.searchParams.set('itdDate',        date);
-  url.searchParams.set('itdTime',        time);
-  url.searchParams.set('ptOptionsActive','1');
-  url.searchParams.set('mergeDep',       '1');
+  url.searchParams.set('outputFormat',    'rapidJSON');
+  url.searchParams.set('language',        'de');
+  url.searchParams.set('type_dm',         'stopID');
+  url.searchParams.set('name_dm',         stopId);
+  url.searchParams.set('mode',            'direct');
+  url.searchParams.set('useRealtime',     '1');
+  url.searchParams.set('limit',           String(limit * 3)); // mehr abrufen da viele gefiltert werden
+  url.searchParams.set('itdDate',         date);
+  url.searchParams.set('itdTime',         time);
+  url.searchParams.set('ptOptionsActive', '1');
+  url.searchParams.set('mergeDep',        '0'); // NICHT mergen – alle einzeln anzeigen
+  url.searchParams.set('depType',         'stopEvents');
 
   console.log(`[VRR] GET ${url.toString()}`);
   const res = await fetch(url.toString(), {
@@ -329,10 +344,10 @@ function convertVRR(data, limit = 25) {
   console.log(`[VRR] ${deps.length} stopEvents empfangen`);
   if (deps.length > 0) {
     const t = deps[0].transportation ?? {};
-    //console.log('[VRR] transportation keys:', Object.keys(t));
-    //console.log('[VRR] product:', JSON.stringify(t.product));
-    //console.log('[VRR] destination:', JSON.stringify(t.destination));
-    //console.log('[VRR] departureTimePlanned:', deps[0].departureTimePlanned);
+    console.log('[VRR] transportation keys:', Object.keys(t));
+    console.log('[VRR] product:', JSON.stringify(t.product));
+    console.log('[VRR] destination:', JSON.stringify(t.destination));
+    console.log('[VRR] departureTimePlanned:', deps[0].departureTimePlanned);
   }
 
   const result  = [];
@@ -386,8 +401,19 @@ function convertVRR(data, limit = 25) {
     }
   }
 
-  console.log(`[VRR] ${result.length} Busse nach Filter`);
-  return result;
+  // Duplikate entfernen: gleiche Linie + gleiche Planzeit
+  const vrrSeen = new Set();
+  const vrrDeduped = result.filter(d => {
+    // Nur Minuten-Genauigkeit für den Key (Sekunden ignorieren)
+    const t = d.plannedWhen ? d.plannedWhen.slice(0, 16) : '';
+    const key = `${d.line?.name}|${t}|${d.direction}`;
+    if (vrrSeen.has(key)) return false;
+    vrrSeen.add(key);
+    return true;
+  });
+
+  console.log(`[VRR] ${result.length} Busse → ${vrrDeduped.length} nach Dedup`);
+  return vrrDeduped;
 }
 
 /* ── VRR Debug ──────────────────────────────────────────────────── */
